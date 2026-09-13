@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Negative Feedback Loop — Species Concentration vs. Time</title>
+<style>
+  :root{
+    --surface:#ffffff;
+    --page:#f5f6f7;
+    --ink:#0b0b0b;
+    --ink-2:#52514e;
+    --ink-muted:#82817c;
+    --grid:#e3e2dd;
+    --baseline:#c7c6bf;
+    --border:rgba(11,11,11,0.10);
+    --accent:#2a78d6;      /* A */
+    --accent2:#eb6834;     /* B */
+    --sig:#8f8d85;         /* S */
+    --card:#fbfbfa;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 40px;}
+  h1{font-size:1.4rem;font-weight:700;margin:0 0 6px;letter-spacing:-0.01em;}
+  .sub{color:var(--ink-2);font-size:0.92rem;line-height:1.55;margin:0 0 18px;max-width:74ch;}
+  .sub b{color:var(--ink);}
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px 18px 16px;
+    margin-bottom:18px;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .card h2{font-size:1.02rem;margin:0 0 4px;}
+  .card .cardsub{color:var(--ink-2);font-size:0.82rem;margin:0 0 14px;}
+
+  /* controls */
+  .controls-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:14px 18px;
+    margin-bottom:6px;
+  }
+  .ctrl label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:0.8rem; color:var(--ink-2); margin-bottom:4px;
+  }
+  .ctrl label .v{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .ctrl input[type=range]{
+    width:100%; accent-color:var(--accent); height:20px; cursor:pointer;
+  }
+  .section-label{
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--ink-muted); margin:16px 0 10px; padding-top:14px; border-top:1px solid var(--grid);
+  }
+  .section-label:first-of-type{ margin-top:2px; padding-top:0; border-top:none; }
+  .toggles{
+    display:flex; flex-wrap:wrap; gap:16px; align-items:center;
+    margin-top:14px; padding-top:14px; border-top:1px solid var(--grid);
+    font-size:0.82rem; color:var(--ink-2);
+  }
+  .toggles label{display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .toggles input[type=checkbox]{accent-color:var(--accent); width:15px; height:15px; cursor:pointer;}
+  .btnrow{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  button{
+    font:inherit; font-size:0.82rem; font-weight:600; cursor:pointer;
+    padding:8px 14px; border-radius:8px; border:1px solid var(--border);
+    background:var(--card); color:var(--ink); transition:background .12s;
+  }
+  button:hover{background:#f0efec;}
+  button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  button.primary:hover{background:#2468bd;}
+
+  /* chart */
+  .chartwrap{position:relative;}
+  canvas{width:100%; display:block; touch-action:none;}
+  .legend{
+    display:flex; gap:20px; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-2);
+    margin-top:10px; padding-top:12px; border-top:1px solid var(--grid);
+  }
+  .legend span{display:inline-flex; align-items:center; gap:7px;}
+  .swatch{width:14px; height:3px; border-radius:2px; display:inline-block;}
+  .swatch.dashed{
+    background:none; height:0; border-top:2px dashed var(--sig); margin-top:1px;
+  }
+  .tooltip{
+    position:absolute; pointer-events:none; background:var(--ink); color:#fff;
+    font-size:0.74rem; padding:7px 10px; border-radius:7px; line-height:1.5;
+    box-shadow:0 4px 14px rgba(0,0,0,0.25); transform:translate(-50%,-115%);
+    white-space:nowrap; opacity:0; transition:opacity .08s;
+    z-index:5;
+  }
+  .steadystate{
+    display:flex; gap:22px; flex-wrap:wrap; margin-top:14px; padding-top:14px;
+    border-top:1px solid var(--grid);
+  }
+  .ss-item{font-size:0.85rem; color:var(--ink-2);}
+  .ss-item b{color:var(--ink); font-variant-numeric:tabular-nums; font-size:1.05rem;}
+  .footnote{font-size:0.78rem; color:var(--ink-muted); line-height:1.6; margin:2px 0 0;}
+  .badge{
+    display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:.02em;
+    color:#2a78d6; background:#e7f0fb; border-radius:5px; padding:2px 7px; margin-left:6px;
+    vertical-align:middle;
+  }
+  .sources{font-size:0.8rem; color:var(--ink-2); line-height:1.8;}
+  .sources a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>A 3-Node Negative Feedback Loop</h1>
+  <p class="sub">
+    Signal <b>S</b> (clamped/externally controlled) drives production of species
+    <b>A</b>, which is converted reversibly to species <b>B</b> through a saturable
+    enzyme step. <b>B</b> feeds back to inhibit the production of A from S, closing a
+    single negative-feedback loop: S&nbsp;&rarr;&nbsp;A&nbsp;&rarr;&nbsp;B&nbsp;&#8867;&nbsp;A.
+    Unlike the antithetic-feedback (X-mediated) design, a direct feedback loop like
+    this one generally gives only <b>approximate</b> homeostasis — watch whether B
+    truly returns to its starting value after each step in S, or merely comes close.
+  </p>
+
+  <div class="card">
+    <h2>Model &amp; controls</h2>
+    <p class="cardsub">
+      Reaction network: S&nbsp;&rarr;&nbsp;A, rate = k<sub>1</sub>S(1&minus;A) &minus; k<sub>2</sub>AB
+      (inhibited by B) &nbsp;·&nbsp; A&nbsp;&#8646;&nbsp;B, reversible saturable kinetics
+      (V<sub>f</sub>, V<sub>r</sub>, K<sub>mf</sub>, K<sub>mr</sub>)
+    </p>
+
+    <div class="section-label">Rate constants</div>
+    <div class="controls-grid">
+      <div class="ctrl">
+        <label>k<sub>1</sub> — S&rarr;A rate <span class="v" id="v-k1"></span></label>
+        <input type="range" id="k1_r0" min="0" max="400" step="5" value="200">
+      </div>
+      <div class="ctrl">
+        <label>k<sub>2</sub> — feedback inhibition rate <span class="v" id="v-k2"></span></label>
+        <input type="range" id="k2_r0" min="0" max="400" step="5" value="200">
+      </div>
+      <div class="ctrl">
+        <label>V<sub>f</sub> — A&rarr;B max rate <span class="v" id="v-vf"></span></label>
+        <input type="range" id="VmaxFwd_r1" min="0.5" max="30" step="0.5" value="10">
+      </div>
+      <div class="ctrl">
+        <label>V<sub>r</sub> — B&rarr;A max rate <span class="v" id="v-vr"></span></label>
+        <input type="range" id="VmaxRev_r1" min="0.5" max="30" step="0.5" value="4">
+      </div>
+      <div class="ctrl">
+        <label>K<sub>mf</sub> — forward Km <span class="v" id="v-kmf"></span></label>
+        <input type="range" id="KmFwd_r1" min="0.001" max="0.5" step="0.001" value="0.01">
+      </div>
+      <div class="ctrl">
+        <label>K<sub>mr</sub> — reverse Km <span class="v" id="v-kmr"></span></label>
+        <input type="range" id="KmRev_r1" min="0.001" max="0.5" step="0.001" value="0.01">
+      </div>
+    </div>
+
+    <div class="section-label">Initial conditions &amp; duration</div>
+    <div class="controls-grid">
+      <div class="ctrl">
+        <label>Initial signal, S&#8320; <span class="v" id="v-S0"></span></label>
+        <input type="range" id="S0" min="0" max="2" step="0.05" value="0.2">
+      </div>
+      <div class="ctrl">
+        <label>Initial A&#8320; <span class="v" id="v-A0"></span></label>
+        <input type="range" id="A0" min="0" max="1" step="0.01" value="0.39">
+      </div>
+      <div class="ctrl">
+        <label>Initial B&#8320; <span class="v" id="v-B0"></span></label>
+        <input type="range" id="B0" min="0" max="1" step="0.01" value="0.3">
+      </div>
+      <div class="ctrl">
+        <label>Simulation duration (s) <span class="v" id="v-dur"></span></label>
+        <input type="range" id="dur" min="20" max="150" step="5" value="95">
+      </div>
+    </div>
+
+    <div class="section-label">Signal staircase (step up, then step down)</div>
+    <div class="controls-grid" id="staircase-controls">
+      <div class="ctrl">
+        <label>Step size, &Delta;S <span class="v" id="v-step"></span></label>
+        <input type="range" id="step" min="0" max="0.5" step="0.02" value="0.2">
+      </div>
+      <div class="ctrl">
+        <label>First step at t = <span class="v" id="v-first"></span></label>
+        <input type="range" id="first" min="0" max="30" step="1" value="10">
+      </div>
+      <div class="ctrl">
+        <label>Interval between steps <span class="v" id="v-interval"></span></label>
+        <input type="range" id="interval" min="2" max="20" step="1" value="10">
+      </div>
+      <div class="ctrl">
+        <label>Number of up-steps <span class="v" id="v-nup"></span></label>
+        <input type="range" id="nup" min="0" max="8" step="1" value="4">
+      </div>
+      <div class="ctrl">
+        <label>Number of down-steps <span class="v" id="v-ndown"></span></label>
+        <input type="range" id="ndown" min="0" max="8" step="1" value="4">
+      </div>
+    </div>
+
+    <div class="toggles">
+      <label><input type="checkbox" id="useStaircase" checked> Apply staircase to S (reproduces the original VCell model: up by 0.2 four times, then down by 0.2 four times)</label>
+    </div>
+
+    <div class="btnrow">
+      <button class="primary" id="reset-defaults">Reset to model defaults</button>
+      <button id="download-csv">Download data (CSV)</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Species concentration vs. time</h2>
+    <p class="cardsub">Drag across the plot to inspect values at a given time.</p>
+    <div class="chartwrap">
+      <canvas id="chart" height="420"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    <div class="legend">
+      <span><i class="swatch dashed"></i>Signal, S</span>
+      <span><i class="swatch" style="background:var(--accent);"></i>Species A</span>
+      <span><i class="swatch" style="background:var(--accent2);"></i>Species B</span>
+    </div>
+    <div class="steadystate">
+      <div class="ss-item">B at t&nbsp;=&nbsp;0: <b id="b-start-val"></b></div>
+      <div class="ss-item">B at end of run: <b id="b-end-val"></b></div>
+      <div class="ss-item">Difference: <b id="b-diff-val"></b></div>
+    </div>
+    <p class="footnote">
+      Compare "B at t = 0" with "B at end of run" (S returns to the same value at
+      both times by default). If this were <i>perfect</i> adaptation the two numbers
+      would match exactly, as they do in the antithetic-feedback (X-mediated) model.
+      Here they land close but not identical — the signature of a direct negative
+      feedback loop, which buys <b style="color:var(--ink-2)">approximate</b>,
+      not exact, homeostasis.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:8px;">About this model <span class="badge">Sniffers, buzzers, toggles &amp; blinkers</span></h2>
+    <p class="footnote" style="font-size:0.83rem;">
+      This ModelBrick is a variant built from the same article as the antithetic
+      (X-mediated) perfect-adaptation model: a three-node network in which signal S
+      drives species A, A interconverts with B through a saturable enzymatic step, and
+      B feeds back to suppress A's production — a direct, single negative-feedback
+      loop rather than the article's separate integral-feedback pathway. S is stepped
+      up in four increments of 0.2 and then back down in four decrements of 0.2,
+      letting you compare A and B's response on the way up against the way down.
+      Originally built and simulated in <a href="https://vcell.org" target="_blank" rel="noopener">VCell</a>
+      and exported as SBML.
+    </p>
+    <ul class="sources">
+      <li>Tyson, J. J., Chen, K. C. &amp; Novak, B. (2003). <a href="https://doi.org/10.1016/S0955-0674(03)00017-6" target="_blank" rel="noopener">Sniffers, buzzers, toggles and blinkers: dynamics of regulatory and signaling pathways in the cell</a>. <em>Current Opinion in Cell Biology</em>, 15(2), 221–231.</li>
+      <li>Related model source: <a href="https://www.ebi.ac.uk/biomodels/BIOMD0000000312" target="_blank" rel="noopener">BioModels BIOMD0000000312</a> / MODEL1102100000 (PubMed <a href="https://pubmed.ncbi.nlm.nih.gov/12648679/" target="_blank" rel="noopener">12648679</a>) — the antithetic-feedback ModelBrick this negative-feedback variant was adapted from.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- element refs ----------
+  const el = id => document.getElementById(id);
+  const sliders = {
+    k1_r0: el('k1_r0'), k2_r0: el('k2_r0'),
+    VmaxFwd_r1: el('VmaxFwd_r1'), VmaxRev_r1: el('VmaxRev_r1'),
+    KmFwd_r1: el('KmFwd_r1'), KmRev_r1: el('KmRev_r1'),
+    S0: el('S0'), A0: el('A0'), B0: el('B0'), dur: el('dur'),
+    step: el('step'), first: el('first'), interval: el('interval'),
+    nup: el('nup'), ndown: el('ndown')
+  };
+  const vlabels = {
+    k1_r0: el('v-k1'), k2_r0: el('v-k2'),
+    VmaxFwd_r1: el('v-vf'), VmaxRev_r1: el('v-vr'),
+    KmFwd_r1: el('v-kmf'), KmRev_r1: el('v-kmr'),
+    S0: el('v-S0'), A0: el('v-A0'), B0: el('v-B0'), dur: el('v-dur'),
+    step: el('v-step'), first: el('v-first'), interval: el('v-interval'),
+    nup: el('v-nup'), ndown: el('v-ndown')
+  };
+  const useStaircase = el('useStaircase');
+  const staircaseControls = el('staircase-controls');
+  const canvas = el('chart');
+  const ctx = canvas.getContext('2d');
+  const tooltip = el('tooltip');
+  const bStartEl = el('b-start-val');
+  const bEndEl = el('b-end-val');
+  const bDiffEl = el('b-diff-val');
+
+  const DEFAULTS = {
+    k1_r0:200, k2_r0:200, VmaxFwd_r1:10, VmaxRev_r1:4, KmFwd_r1:0.01, KmRev_r1:0.01,
+    S0:0.2, A0:0.39, B0:0.3, dur:95,
+    step:0.2, first:10, interval:10, nup:4, ndown:4, useStaircase:true
+  };
+
+  function fmt(n, d){ return Number(n).toFixed(d===undefined?2:d); }
+
+  function readParams(){
+    return {
+      k1_r0: parseFloat(sliders.k1_r0.value),
+      k2_r0: parseFloat(sliders.k2_r0.value),
+      VmaxFwd_r1: parseFloat(sliders.VmaxFwd_r1.value),
+      VmaxRev_r1: parseFloat(sliders.VmaxRev_r1.value),
+      KmFwd_r1: parseFloat(sliders.KmFwd_r1.value),
+      KmRev_r1: parseFloat(sliders.KmRev_r1.value),
+      S0: parseFloat(sliders.S0.value),
+      A0: parseFloat(sliders.A0.value),
+      B0: parseFloat(sliders.B0.value),
+      dur: parseFloat(sliders.dur.value),
+      step: parseFloat(sliders.step.value),
+      first: parseFloat(sliders.first.value),
+      interval: parseFloat(sliders.interval.value),
+      nup: parseInt(sliders.nup.value,10),
+      ndown: parseInt(sliders.ndown.value,10),
+      useStaircase: useStaircase.checked
+    };
+  }
+
+  function updateLabels(p){
+    vlabels.k1_r0.textContent = fmt(p.k1_r0,0)+' s⁻¹µM⁻¹';
+    vlabels.k2_r0.textContent = fmt(p.k2_r0,0)+' s⁻¹µM⁻¹';
+    vlabels.VmaxFwd_r1.textContent = fmt(p.VmaxFwd_r1,1)+' s⁻¹';
+    vlabels.VmaxRev_r1.textContent = fmt(p.VmaxRev_r1,1)+' µM/s';
+    vlabels.KmFwd_r1.textContent = fmt(p.KmFwd_r1,3)+' µM';
+    vlabels.KmRev_r1.textContent = fmt(p.KmRev_r1,3)+' µM';
+    vlabels.S0.textContent = fmt(p.S0,2);
+    vlabels.A0.textContent = fmt(p.A0,2);
+    vlabels.B0.textContent = fmt(p.B0,2);
+    vlabels.dur.textContent = fmt(p.dur,0)+' s';
+    vlabels.step.textContent = '±'+fmt(p.step,2);
+    vlabels.first.textContent = fmt(p.first,1)+' s';
+    vlabels.interval.textContent = fmt(p.interval,1)+' s';
+    vlabels.nup.textContent = p.nup;
+    vlabels.ndown.textContent = p.ndown;
+  }
+
+  // ---------- simulation ----------
+  // S is a boundary species: dS/dt = 0 except discrete jumps from the staircase.
+  // r0 (S -> A, inhibited by B):  R0 = k1_r0*S*(1-A) - k2_r0*A*B
+  // r1 (A <-> B, saturable):      R1 = bigTerm / denom   (transcribed directly from the SBML kineticLaw)
+  // dA/dt = R0 - R1 ; dB/dt = R1
+  function deriv(state, p){
+    const [S,A,B] = state;
+    const R0 = p.k1_r0*S*(1-A) - p.k2_r0*A*B;
+
+    const t1 = -1*A*B*p.VmaxFwd_r1;
+    const t2 = A*B*B*p.VmaxFwd_r1;
+    const t3 = -(A*p.KmRev_r1*p.VmaxFwd_r1);
+    const t4 = A*B*p.KmRev_r1*p.VmaxFwd_r1;
+    const t5 = B*p.VmaxRev_r1;
+    const t6 = -(B*B*p.VmaxRev_r1);
+    const t7 = B*p.KmFwd_r1*p.VmaxRev_r1;
+    const sumT = t1+t2+t3+t4+t5+t6+t7;
+    const bigTerm = -1*sumT;
+    const denomF1 = 1 - B + p.KmFwd_r1;
+    const denomF2 = B + p.KmRev_r1;
+    const denom = denomF1*denomF2;
+    const R1 = Math.abs(denom) > 1e-12 ? bigTerm/denom : 0;
+
+    return [0, R0 - R1, R1];
+  }
+
+  function rk4Step(state, p, dt){
+    const k1v = deriv(state, p);
+    const s2 = state.map((v,i)=>v + dt/2*k1v[i]);
+    const k2v = deriv(s2, p);
+    const s3 = state.map((v,i)=>v + dt/2*k2v[i]);
+    const k3v = deriv(s3, p);
+    const s4 = state.map((v,i)=>v + dt*k3v[i]);
+    const k4v = deriv(s4, p);
+    return state.map((v,i)=> v + dt/6*(k1v[i] + 2*k2v[i] + 2*k3v[i] + k4v[i]));
+  }
+
+  function eventList(p){
+    if (!p.useStaircase) return [];
+    const evs = [];
+    for (let i=0;i<p.nup;i++) evs.push({ t:+(p.first + i*p.interval).toFixed(6), d: p.step });
+    const downStart = p.first + p.nup*p.interval;
+    for (let i=0;i<p.ndown;i++) evs.push({ t:+(downStart + i*p.interval).toFixed(6), d: -p.step });
+    evs.sort((a,b)=>a.t-b.t);
+    return evs;
+  }
+
+  function simulate(p){
+    const dt = 0.002; // small step: rate constants k1_r0/k2_r0 can be large
+    const n = Math.round(p.dur/dt);
+    const evs = eventList(p);
+    let evIdx = 0;
+    let state = [p.S0, p.A0, p.B0];
+    const t = new Float64Array(n+1);
+    const S = new Float64Array(n+1);
+    const A = new Float64Array(n+1);
+    const B = new Float64Array(n+1);
+    t[0]=0; S[0]=state[0]; A[0]=state[1]; B[0]=state[2];
+
+    for (let i=1;i<=n;i++){
+      let time = (i-1)*dt;
+      if (evIdx < evs.length && evs[evIdx].t > time && evs[evIdx].t <= time+dt+1e-9){
+        const dtA = evs[evIdx].t-time;
+        if (dtA > 1e-9) state = rk4Step(state, p, dtA);
+        state[0] += evs[evIdx].d; // apply jump to S
+        const dtB = dt - dtA;
+        if (dtB > 1e-9) state = rk4Step(state, p, dtB);
+        evIdx++;
+      } else {
+        state = rk4Step(state, p, dt);
+      }
+      t[i]=i*dt; S[i]=state[0]; A[i]=state[1]; B[i]=state[2];
+    }
+    return {t,S,A,B};
+  }
+
+  // ---------- chart ----------
+  let lastData = null;
+  let lastP = null;
+
+  function niceMax(v){
+    if (v <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    const norm = v / mag;
+    let step;
+    if (norm <= 1) step = 1;
+    else if (norm <= 2) step = 2;
+    else if (norm <= 5) step = 5;
+    else step = 10;
+    return step * mag;
+  }
+
+  function niceStep(rawStep){
+    if (rawStep <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let step;
+    if (norm <= 1) step = 1;
+    else if (norm <= 2) step = 2;
+    else if (norm <= 5) step = 5;
+    else step = 10;
+    return step * mag;
+  }
+
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const cssH = 420;
+    canvas.style.height = cssH+'px';
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  const PAD = {left:46, right:16, top:16, bottom:34};
+
+  function draw(){
+    if (!lastData) return;
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = 420;
+    ctx.clearRect(0,0,W,H);
+
+    const {t,S,A,B} = lastData;
+    const p = lastP;
+    let ymax = 0;
+    for (let i=0;i<t.length;i++){ ymax = Math.max(ymax, S[i], A[i], B[i]); }
+    ymax = niceMax(ymax*1.08);
+
+    const xw = W - PAD.left - PAD.right;
+    const yh = H - PAD.top - PAD.bottom;
+    const xScale = v => PAD.left + (v/p.dur)*xw;
+    const yScale = v => PAD.top + yh - (v/ymax)*yh;
+
+    ctx.strokeStyle = '#e3e2dd';
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui,sans-serif';
+    ctx.fillStyle = '#82817c';
+    const yTicks = 5;
+    for (let i=0;i<=yTicks;i++){
+      const val = ymax*i/yTicks;
+      const y = yScale(val);
+      ctx.beginPath(); ctx.moveTo(PAD.left,y); ctx.lineTo(W-PAD.right,y); ctx.stroke();
+      ctx.textAlign='right'; ctx.textBaseline='middle';
+      ctx.fillText(val.toFixed(val<1?2:1), PAD.left-8, y);
+    }
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    const xStep = niceStep(p.dur/8);
+    for (let val=0; val<=p.dur+1e-9; val+=xStep){
+      const x = xScale(val);
+      ctx.fillText(Math.round(val).toString(), x, H-PAD.bottom+8);
+    }
+    ctx.strokeStyle = '#c7c6bf';
+    ctx.beginPath(); ctx.moveTo(PAD.left,H-PAD.bottom); ctx.lineTo(W-PAD.right,H-PAD.bottom); ctx.stroke();
+
+    ctx.fillStyle = '#82817c';
+    ctx.textAlign='center';
+    ctx.fillText('time (s)', PAD.left + xw/2, H-14);
+
+    function drawLine(arr, color, dashed){
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      if (dashed) ctx.setLineDash([5,4]); else ctx.setLineDash([]);
+      const stepN = Math.max(1, Math.floor(arr.length/1200));
+      for (let i=0;i<arr.length;i+=stepN){
+        const x = xScale(t[i]);
+        const y = yScale(arr[i]);
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      const xf = xScale(t[t.length-1]), yf = yScale(arr[arr.length-1]);
+      ctx.lineTo(xf,yf);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    drawLine(S, '#8f8d85', true);
+    drawLine(A, '#2a78d6', false);
+    drawLine(B, '#eb6834', false);
+
+    if (p.useStaircase){
+      eventList(p).forEach(function(ev){
+        if (ev.t<=p.dur){
+          const x = xScale(ev.t);
+          ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H-PAD.bottom);
+          ctx.strokeStyle='rgba(143,141,133,0.25)';
+          ctx.lineWidth=1; ctx.setLineDash([2,3]); ctx.stroke(); ctx.setLineDash([]);
+        }
+      });
+    }
+  }
+
+  function findNearestIndex(timeVal){
+    const dt = lastData.t[1]-lastData.t[0];
+    let idx = Math.round(timeVal/dt);
+    idx = Math.max(0, Math.min(lastData.t.length-1, idx));
+    return idx;
+  }
+
+  function drawCrosshair(clientX){
+    const rect = canvas.getBoundingClientRect();
+    const xpx = clientX - rect.left;
+    const xw = rect.width - PAD.left - PAD.right;
+    let frac = (xpx - PAD.left)/xw;
+    frac = Math.max(0, Math.min(1, frac));
+    const timeVal = frac*lastP.dur;
+    const idx = findNearestIndex(timeVal);
+    draw();
+    const x = PAD.left + frac*xw;
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(11,11,11,0.35)';
+    ctx.lineWidth = 1;
+    ctx.moveTo(x, PAD.top); ctx.lineTo(x, 420-PAD.bottom);
+    ctx.stroke();
+
+    tooltip.style.opacity = 1;
+    tooltip.style.left = xpx + 'px';
+    tooltip.style.top = '0px';
+    tooltip.innerHTML =
+      't = '+lastData.t[idx].toFixed(2)+' s<br>'+
+      '<span style="color:#b9b7ae">S</span> = '+lastData.S[idx].toFixed(3)+'<br>'+
+      '<span style="color:#7fb3ec">A</span> = '+lastData.A[idx].toFixed(3)+'<br>'+
+      '<span style="color:#f2a077">B</span> = '+lastData.B[idx].toFixed(3);
+  }
+
+  canvas.addEventListener('mousemove', e=>drawCrosshair(e.clientX));
+  canvas.addEventListener('mouseleave', ()=>{ tooltip.style.opacity=0; draw(); });
+  canvas.addEventListener('touchmove', e=>{ if(e.touches[0]) drawCrosshair(e.touches[0].clientX); }, {passive:true});
+  canvas.addEventListener('touchend', ()=>{ tooltip.style.opacity=0; draw(); });
+
+  function run(){
+    const p = readParams();
+    updateLabels(p);
+    staircaseControls.style.opacity = p.useStaircase ? 1 : 0.4;
+    staircaseControls.style.pointerEvents = p.useStaircase ? 'auto' : 'none';
+    lastData = simulate(p);
+    lastP = p;
+    resizeCanvas();
+    draw();
+
+    const bStart = lastData.B[0];
+    const bEnd = lastData.B[lastData.B.length-1];
+    bStartEl.textContent = bStart.toFixed(4);
+    bEndEl.textContent = bEnd.toFixed(4);
+    bDiffEl.textContent = (bEnd-bStart>=0?'+':'')+(bEnd-bStart).toFixed(4);
+  }
+
+  Object.values(sliders).forEach(s => s.addEventListener('input', run));
+  useStaircase.addEventListener('change', run);
+
+  el('reset-defaults').addEventListener('click', function(){
+    Object.keys(DEFAULTS).forEach(function(k){
+      if (k === 'useStaircase') { useStaircase.checked = DEFAULTS[k]; return; }
+      if (sliders[k]) sliders[k].value = DEFAULTS[k];
+    });
+    run();
+  });
+
+  el('download-csv').addEventListener('click', function(){
+    if (!lastData) return;
+    const {t,S,A,B} = lastData;
+    const stepN = Math.max(1, Math.floor(t.length/2000));
+    let csv = 'time_s,S,A,B\n';
+    for (let i=0;i<t.length;i+=stepN){
+      csv += t[i].toFixed(4)+','+S[i].toFixed(6)+','+A[i].toFixed(6)+','+B[i].toFixed(6)+'\n';
+    }
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'negative_feedback_simulation.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  window.addEventListener('resize', function(){ resizeCanvas(); draw(); });
+
+  // init
+  run();
+})();
+</script>
+</body>
+</html>
